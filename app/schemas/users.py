@@ -14,6 +14,7 @@ class BaseUser(BaseModel):
     updated_at: Optional[datetime]
     last_login: Optional[datetime]
     roles: Optional[list] = []
+    city: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -24,6 +25,7 @@ class UserCreate(BaseModel):
     is_superuser: Optional[bool] = False
     role_ids: Optional[List[int]] = []
     dept_id: Optional[int] = Field(0, description="部门ID")
+    city: Optional[str] = Field(None, description="所在城市")
 
     def create_dict(self):
         return self.model_dump(exclude_unset=True, exclude={"role_ids"})
@@ -37,6 +39,7 @@ class UserUpdate(BaseModel):
     is_superuser: Optional[bool] = False
     role_ids: Optional[List[int]] = []
     dept_id: Optional[int] = 0
+    city: Optional[str] = None
 
 
 class UpdatePassword(BaseModel):
