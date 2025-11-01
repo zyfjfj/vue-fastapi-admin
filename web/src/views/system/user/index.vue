@@ -16,6 +16,7 @@ import {
   NLayoutSider,
   NLayoutContent,
   NTreeSelect,
+  NCascader,
 } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -36,13 +37,13 @@ const $table = ref(null)
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
 
-const {
-  modalVisible,
-  modalTitle,
-  modalAction,
-  modalLoading,
-  handleSave,
-  modalForm,
+const { 
+  modalVisible, 
+  modalTitle, 
+  modalAction, 
+  modalLoading, 
+  handleSave, 
+  modalForm, 
   modalFormRef,
   handleEdit,
   handleDelete,
@@ -56,14 +57,68 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
+// 处理编辑时的城市数据
+const originalHandleEdit = handleEdit
+const handleEdit = (row) => {
+  originalHandleEdit(row)
+  // 处理部门数据
+  modalForm.value.dept_id = row.dept?.id
+  // 处理角色数据
+  modalForm.value.role_ids = row.roles.map((e) => e.id)
+  // 删除不需要的字段
+  delete modalForm.value.dept
+  // 如果有城市数据，分割为级联选择器所需的数组
+  if (row.city) {
+    modalForm.value.city = row.city.split(',')
+  }
+}
+
 const roleOption = ref([])
 const deptOption = ref([])
+const cityOption = ref([])
 
 onMounted(() => {
   $table.value?.handleSearch()
   api.getRoleList({ page: 1, page_size: 9999 }).then((res) => (roleOption.value = res.data))
   api.getDepts().then((res) => (deptOption.value = res.data))
+  fetchCities()
 })
+
+// 获取城市数据
+async function fetchCities() {
+  try {
+    // 使用公共API获取中国城市数据
+    const response = await fetch('https://restapi.amap.com/v3/config/district?keywords=中国&key=02f4704b5d32f60961ff9f15204f5575')
+    const data = await response.json()
+    if (data.status === '1') {
+      cityOption.value = formatCityData(data.districts[0].districts)
+    }
+  } catch (error) {
+    console.error('获取城市数据失败:', error)
+  }
+}
+
+// 格式化城市数据为级联选择器所需格式
+function formatCityData(districts) {
+  return districts.map(province => {
+    const cities = province.districts.map(city => {
+      const areas = city.districts.map(area => ({
+        label: area.name,
+        value: area.name
+      }))
+      return {
+        label: city.name,
+        value: city.name,
+        children: areas.length > 0 ? areas : undefined
+      }
+    })
+    return {
+      label: province.name,
+      value: province.name,
+      children: cities
+    }
+  })
+}
 
 const columns = [
   {
@@ -166,9 +221,6 @@ const columns = [
               style: 'margin-right: 8px;',
               onClick: () => {
                 handleEdit(row)
-                modalForm.value.dept_id = row.dept?.id
-                modalForm.value.role_ids = row.roles.map((e) => (e = e.id))
-                delete modalForm.value.dept
               },
             },
             {
@@ -270,6 +322,15 @@ async function handleUpdateDisable(row) {
   } finally {
     row.publishing = false
   }
+}
+
+// 重写handleSave方法，处理城市数据
+const handleSaveWithCity = async () => {
+  // 将城市数组转换为字符串，如"广东省,广州市,天河区"
+  if (modalForm.value.city && Array.isArray(modalForm.value.city)) {
+    modalForm.value.city = modalForm.value.city.join(',')
+  }
+  await handleSave()
 }
 
 let lastClickedNodeId = null
@@ -413,7 +474,7 @@ const validateAddUser = {
           v-model:visible="modalVisible"
           :title="modalTitle"
           :loading="modalLoading"
-          @save="handleSave"
+          @save="handleSaveWithCity"
         >
           <NForm
             ref="modalFormRef"
@@ -485,6 +546,15 @@ const validateAddUser = {
                 clearable
                 default-expand-all
               ></NTreeSelect>
+            </NFormItem>
+            <NFormItem label="所在城市" path="city">
+              <NCascader
+                v-model:value="modalForm.city"
+                :options="cityOption"
+                placeholder="请选择城市"
+                clearable
+                show-path
+              ></NCascader>
             </NFormItem>
           </NForm>
         </CrudModal>
